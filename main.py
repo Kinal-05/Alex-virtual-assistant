@@ -1,6 +1,7 @@
 import speech_recognition as sr
 import webbrowser
 import pyttsx3
+import requests
 
 import musicLibrary
 
@@ -8,6 +9,7 @@ import musicLibrary
 
 recognizer = sr.Recognizer()
 engine = pyttsx3.init()
+newsapi = "295e6880d70d43dc9d7961ff7b49619f"
 
 def speak(text):
     engine.say(text)
@@ -26,30 +28,60 @@ def processCommand(c):
         song = c.lower().split(" ")[1]
         link = musicLibrary.music[song]
         webbrowser.open(link)
+    elif "news" in c.lower():
+        r = requests.get("https://newsapi.org/v2/top-headlines?country=in&apiKey={newsapi}")
+        if r.status_code == 200:
+            #PArse the JSON response
+            data = r.json()
+
+            #Extract the articles
+            articles = data.get('articles', [])
+
+            #Print the headlines
+            for article in articles:
+                speak(article['title'])
+
+
+def listen_for_wake_word():
+    """Continuously listens for the wake word 'Alex'."""
+    with sr.Microphone() as source:
+        recognizer.adjust_for_ambient_noise(source)  # Reduce background noise
+        print("Listening for 'Alex'...")
+
+        while True:
+            try:
+                audio = recognizer.listen(source, timeout=None)  # Always listening
+                word = recognizer.recognize_google(audio).lower()
+                print(f"Heard: {word}")
+
+                if "alex" in word:
+                    speak("Yes?")
+                    listen_for_command()
+            except sr.UnknownValueError:
+                pass  # Ignore unrecognized speech
+            except sr.RequestError:
+                speak("Sorry, I'm having trouble connecting.")
+            except Exception as e:
+                print(f"Error: {e}")
+
+def listen_for_command():
+    """Listens for a command after hearing 'Alex'."""
+    with sr.Microphone() as source:
+        recognizer.adjust_for_ambient_noise(source)
+        print("Listening for command...")
+
+        try:
+            audio = recognizer.listen(source, timeout=5)  # Give 5 seconds to speak
+            command = recognizer.recognize_google(audio)
+            print(f"Command received: {command}")
+            processCommand(command)
+        except sr.UnknownValueError:
+            speak("I didn't catch that. Can you repeat?")
+        except sr.RequestError:
+            speak("I'm having trouble connecting.")
+        except Exception as e:
+            print(f"Error: {e}")
 
 if __name__ == "__main__":
-    speak("1initializing Alex...")
-    while True:
-        #Listen for the wake word "Alex"
-        # obtain audio from the microphone
-        r = sr.Recognizer()
-
-        print("recognizing...")
-        try:
-            with sr.Microphone() as source:
-                print("Listening...")
-                audio = r.listen(source, timeout=2, phrase_time_limit=1)
-            word = r.recognize_google(audio)
-            if(word.lower() == "alex"):
-                speak("Yes")
-                #Listen for command
-                with sr.Microphone() as source:
-                    print("Alex Active...")
-                    audio = r.listen(source)
-                    command = r.recognize_google(audio)
-
-                    processCommand(command)
-
-
-        except Exception as e:
-            print("Error; {0}".format(e))
+    speak("Initializing Alex...")
+    listen_for_wake_word()
